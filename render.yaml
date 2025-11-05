@@ -2,7 +2,7 @@ services:
   - type: web
     name: emergencycare-navigator
     env: static
-    buildCommand: echo "No build needed"
+    buildCommand: ""
     staticPublishPath: .
     routes:
       - type: rewrite
