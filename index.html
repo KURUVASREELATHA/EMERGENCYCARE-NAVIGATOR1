@@ -1,0 +1,2724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmergencyCare Navigator</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="ai-assistant.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+    <script>
+        let aiLoaded = false;
+        let analytics = {log: (event, data) => console.log('Analytics:', event, data)};
+        
+        function toggleChat() {
+            const panel = document.getElementById('chat-panel');
+            if (panel) {
+                panel.classList.toggle('active');
+                analytics.log('chat_open', {timestamp: Date.now()});
+                if (!aiLoaded) loadAI();
+            }
+        }
+        
+        function loadAI() {
+            if (aiLoaded) return;
+            aiLoaded = true;
+            const container = document.getElementById('lottie-container');
+            if (container && !container.innerHTML) {
+                container.innerHTML = `
+                    <div class="unity-avatar">
+                        <div class="character">
+                            <div class="head">
+                                <div class="face">
+                                    <div class="eye left"></div>
+                                    <div class="eye right"></div>
+                                    <div class="mouth"></div>
+                                    <div class="cheek left-cheek"></div>
+                                    <div class="cheek right-cheek"></div>
+                                </div>
+                                <div class="hair"></div>
+                            </div>
+                            <div class="torso">
+                                <div class="chest"></div>
+                                <div class="belly"></div>
+                            </div>
+                            <div class="arm left-arm">
+                                <div class="upper-arm"></div>
+                                <div class="forearm"></div>
+                                <div class="hand"></div>
+                            </div>
+                            <div class="arm right-arm">
+                                <div class="upper-arm"></div>
+                                <div class="forearm"></div>
+                                <div class="hand"></div>
+                            </div>
+                            <div class="leg left-leg">
+                                <div class="thigh"></div>
+                                <div class="shin"></div>
+                                <div class="foot"></div>
+                            </div>
+                            <div class="leg right-leg">
+                                <div class="thigh"></div>
+                                <div class="shin"></div>
+                                <div class="foot"></div>
+                            </div>
+                        </div>
+                        <div class="energy-aura"></div>
+                        <div class="particles"></div>
+                    </div>
+                `;
+            }
+        }
+        
+        function updateAIStatus(status) {
+            const statusEl = document.getElementById('ai-status');
+            const avatar = document.querySelector('.avatar-3d');
+            if (statusEl) statusEl.textContent = status;
+            
+            if (avatar) {
+                avatar.className = 'unity-avatar';
+                if (status.includes('Listening')) avatar.classList.add('listening');
+                else if (status.includes('Thinking') || status.includes('Processing')) avatar.classList.add('thinking');
+                else if (status.includes('ready') || status.includes('Suggestion')) avatar.classList.add('speaking');
+            }
+        }
+        function handleChatInput(event) {
+            if (event.key === 'Enter') sendMessage();
+        }
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const content = document.getElementById('chat-content');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            analytics.log('query_submit', {query: message, timestamp: Date.now()});
+            updateAIStatus('Thinking...');
+            
+            content.innerHTML += `<div style="text-align:right;margin:10px 0;"><span style="background:#4ECDC4;color:white;padding:8px 12px;border-radius:15px;">${message}</span></div>`;
+            input.value = '';
+            
+            setTimeout(() => {
+                let response = 'I can help you find medical care. Ask about hospitals or emergencies.';
+                if (message.toLowerCase().includes('emergency')) {
+                    response = 'For emergencies, call 911 immediately. I found 2 nearby hospitals: City Hospital (1.2km, 5min) and Metro Medical (2.4km, 12min). <button onclick="showRoute()">Show Route</button>';
+                } else if (message.toLowerCase().includes('hospital')) {
+                    response = 'I found 3 hospitals near you with availability. Would you like to see them on the map? <button onclick="showSection(\'map\')">View Map</button>';
+                }
+                
+                content.innerHTML += `<div style="margin:10px 0;"><span style="background:#f0f0f0;padding:8px 12px;border-radius:15px;">${response}</span></div>`;
+                content.scrollTop = content.scrollHeight;
+                
+                updateAIStatus('Suggestion ready');
+                analytics.log('response_received', {response: response, timestamp: Date.now()});
+            }, 1000);
+        }
+        function startVoiceChat() {
+            if ('webkitSpeechRecognition' in window) {
+                analytics.log('voice_start', {timestamp: Date.now()});
+                updateAIStatus('Listening...');
+                
+                const recognition = new webkitSpeechRecognition();
+                recognition.start();
+                recognition.onresult = (e) => {
+                    const transcript = e.results[0][0].transcript;
+                    document.getElementById('chat-input').value = transcript;
+                    updateAIStatus('Processing voice input...');
+                    sendMessage();
+                };
+                recognition.onerror = () => updateAIStatus('Voice error. Please type.');
+                recognition.onend = () => updateAIStatus('AI Assistant ready');
+            } else {
+                updateAIStatus('Voice not supported. Please type.');
+            }
+        }
+        
+        function showRoute() {
+            analytics.log('suggestion_accepted', {action: 'show_route'});
+            alert('Opening route to nearest hospital...');
+        }
+    </script>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="login-page" class="page active">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>🏥 EmergencyCare Navigator</h1>
+                    <p>Sign in to your account</p>
+                </div>
+                
+                <form id="login-form" class="auth-form">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>User Type</label>
+                        <select id="login-user-type" required>
+                            <option value="">Select User Type</option>
+                            <option value="user">👤 User</option>
+                            <option value="hospital">🏥 Hospital</option>
+                            <option value="medical-center">🏥 Medical Center</option>
+                            <option value="admin">⚙️ Admin</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">🔑 Sign In</button>
+                </form>
+                
+                <div class="auth-footer">
+                    <p>Don't have an account? <a href="#" onclick="showSignup()">Sign up here</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signup Page -->
+    <div id="signup-page" class="page">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>🏥 EmergencyCare Navigator</h1>
+                    <p>Create your account</p>
+                </div>
+                
+                <form id="signup-form" class="auth-form">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="signup-name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="signup-email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Phone</label>
+                        <input type="tel" id="signup-phone" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="signup-password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" id="signup-confirm-password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>User Type</label>
+                        <select id="signup-user-type" required>
+                            <option value="">Select User Type</option>
+                            <option value="user">👤 User</option>
+                            <option value="hospital">🏥 Hospital</option>
+                            <option value="medical-center">🏥 Medical Center</option>
+                            <option value="admin">⚙️ Admin</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">📝 Sign Up</button>
+                </form>
+                
+                <div class="auth-footer">
+                    <p>Already have an account? <a href="#" onclick="showLogin()">Sign in here</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Dashboard -->
+    <div id="user-dashboard" class="page">
+        <!-- Top Navigation Bar -->
+        <nav class="navbar user-nav">
+            <div class="nav-brand">🏥 EmergencyCare Navigator</div>
+            <div class="nav-menu">
+                <a href="#" onclick="showSection('home')" class="nav-link active">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a href="#" onclick="showSection('profile')" class="nav-link">
+                    <i class="fas fa-user"></i> Profile
+                </a>
+                <a href="#" onclick="showSection('map')" class="nav-link">
+                    <i class="fas fa-map"></i> Map
+                </a>
+                <a href="#" onclick="showSection('health-problems')" class="nav-link">
+                    <i class="fas fa-stethoscope"></i> Health Problems
+                </a>
+                <a href="#" onclick="logout()" class="nav-link logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="main-content-full">
+            <!-- Home Section -->
+            <div id="home-section" class="content-section active">
+                <div class="welcome-header user-welcome-header">
+                    <h1>Welcome to EmergencyCare Navigator</h1>
+                    <p>Your trusted companion for finding emergency medical care</p>
+                </div>
+                
+                <div class="info-cards user-info-cards">
+                    <div class="info-card user-info-card">
+                        <i class="fas fa-ambulance"></i>
+                        <h3>Emergency Services</h3>
+                        <p>24/7 emergency medical care available. Use the Map section to find the nearest hospitals and medical centers in your area.</p>
+                    </div>
+                    <div class="info-card user-info-card">
+                        <i class="fas fa-hospital"></i>
+                        <h3>Hospital Network</h3>
+                        <p>Access to comprehensive hospital information including availability, specialties, and contact details.</p>
+                    </div>
+                    <div class="info-card user-info-card">
+                        <i class="fas fa-clinic-medical"></i>
+                        <h3>Medical Centers</h3>
+                        <p>Find specialized medical centers and clinics for various healthcare needs and treatments.</p>
+                    </div>
+                    <div class="info-card user-info-card">
+                        <i class="fas fa-search"></i>
+                        <h3>Smart Search</h3>
+                        <p>Use voice search and text search to quickly find healthcare facilities in any city or location.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Section -->
+            <div id="profile-section" class="content-section">
+                <div class="profile-header">
+                    <h2>👤 User Profile</h2>
+                </div>
+                
+                <div class="profile-card">
+                    <div class="profile-info">
+                        <div class="info-group">
+                            <label>Name:</label>
+                            <input type="text" id="user-name" placeholder="Enter your name">
+                        </div>
+                        <div class="info-group">
+                            <label>Email:</label>
+                            <input type="email" id="user-email" readonly>
+                        </div>
+                        <div class="info-group">
+                            <label>Phone:</label>
+                            <input type="tel" id="user-phone" placeholder="Enter phone number">
+                        </div>
+                        <div class="info-group">
+                            <label>Emergency Contact:</label>
+                            <input type="tel" id="emergency-contact" placeholder="Emergency contact number">
+                        </div>
+                        <div class="info-group">
+                            <label>Blood Group:</label>
+                            <select id="blood-group">
+                                <option value="">Select Blood Group</option>
+                                <option value="A+">A+</option>
+                                <option value="A-">A-</option>
+                                <option value="B+">B+</option>
+                                <option value="B-">B-</option>
+                                <option value="AB+">AB+</option>
+                                <option value="AB-">AB-</option>
+                                <option value="O+">O+</option>
+                                <option value="O-">O-</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-actions">
+                        <button onclick="saveProfile()" class="btn-primary">💾 Save Profile</button>
+                        <button onclick="deleteAccount()" class="btn-danger">🗑️ Delete Account</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Section -->
+            <div id="map-section" class="content-section">
+                <div class="map-header">
+                    <h2>🗺️ Healthcare Map</h2>
+                    
+                    <!-- Map Type Selection -->
+                    <div class="map-type-selector">
+                        <button onclick="showHospitalMap()" class="map-type-btn active" id="hospital-btn">
+                            🏥 Hospital Map
+                        </button>
+                        <button onclick="showMedicalMap()" class="map-type-btn" id="medical-btn">
+                            🏥 Medical Center Map
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search and Controls -->
+                <div class="map-controls">
+                    <div class="search-container">
+                        <div class="location-options">
+                            <button onclick="showMadanapalle()" class="btn-primary">
+                                🏥 Madanapalle Hospitals
+                            </button>
+                            <button onclick="showMyLocationAndNearby()" class="btn-secondary">
+                                📍 My Location & Nearby
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="filter-buttons">
+                        <button onclick="showAvailableOnly()" class="filter-btn" id="available-btn">
+                            ✅ Available
+                        </button>
+                        <button onclick="showNotAvailable()" class="filter-btn" id="not-available-btn">
+                            ❌ Not Available
+                        </button>
+                        <button onclick="showAllHospitals()" class="filter-btn active" id="all-btn">
+                            🏥 All Hospitals
+                        </button>
+                        <button onclick="showMyLocation()" class="filter-btn" id="location-btn">
+                            📍 My Location
+                        </button>
+                        <button onclick="forceInitMap()" class="filter-btn">
+                            🗺️ Load Map
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Map Container -->
+                <div class="map-container">
+                    <div id="map"></div>
+                </div>
+
+                <!-- Hospital Status Display -->
+                <div class="status-display">
+                    <div class="status-item available">
+                        <span class="status-indicator green"></span>
+                        <span class="status-text">Available</span>
+                    </div>
+                    <div class="status-item unavailable">
+                        <span class="status-indicator red"></span>
+                        <span class="status-text">Not Available</span>
+                    </div>
+                    <div class="status-item location">
+                        <span class="status-indicator blue"></span>
+                        <span class="status-text">Your Location</span>
+                    </div>
+                </div>
+
+                <!-- Hospital Details Box -->
+                <div id="hospital-details" class="hospital-details" style="display: none;">
+                    <h3 id="hospital-name"></h3>
+                    <div id="hospital-info"></div>
+                </div>
+
+                <!-- Hospital Profiles List -->
+                <div id="hospital-profiles" class="hospital-profiles">
+                    <!-- Hospital cards will be populated here -->
+                </div>
+            </div>
+
+            <!-- Health Problems Section -->
+            <div id="health-problems-section" class="content-section">
+                <div class="health-header">
+                    <h2>🩺 Health Problems</h2>
+                    <p>Select your health condition to find specialized doctors</p>
+                </div>
+                
+                <div class="disease-selection">
+                    <div class="disease-categories">
+                        <div class="disease-category">
+                            <h3>💓 Heart & Cardiovascular</h3>
+                            <div class="disease-buttons">
+                                <button onclick="findDoctors('cardiology')" class="disease-btn">Heart Disease</button>
+                                <button onclick="findDoctors('cardiology')" class="disease-btn">High Blood Pressure</button>
+                                <button onclick="findDoctors('cardiology')" class="disease-btn">Chest Pain</button>
+                            </div>
+                        </div>
+                        
+                        <div class="disease-category">
+                            <h3>🦴 Bones & Joints</h3>
+                            <div class="disease-buttons">
+                                <button onclick="findDoctors('orthopedics')" class="disease-btn">Fractures</button>
+                                <button onclick="findDoctors('orthopedics')" class="disease-btn">Joint Pain</button>
+                                <button onclick="findDoctors('orthopedics')" class="disease-btn">Back Pain</button>
+                            </div>
+                        </div>
+                        
+                        <div class="disease-category">
+                            <h3>🚨 Emergency</h3>
+                            <div class="disease-buttons">
+                                <button onclick="findDoctors('emergency')" class="disease-btn">Accident</button>
+                                <button onclick="findDoctors('emergency')" class="disease-btn">Severe Pain</button>
+                                <button onclick="findDoctors('emergency')" class="disease-btn">Breathing Issues</button>
+                            </div>
+                        </div>
+                        
+                        <div class="disease-category">
+                            <h3>👶 Children</h3>
+                            <div class="disease-buttons">
+                                <button onclick="findDoctors('pediatrics')" class="disease-btn">Child Fever</button>
+                                <button onclick="findDoctors('pediatrics')" class="disease-btn">Child Cough</button>
+                                <button onclick="findDoctors('pediatrics')" class="disease-btn">Child Injury</button>
+                            </div>
+                        </div>
+                        
+                        <div class="disease-category">
+                            <h3>🩹 General Medicine</h3>
+                            <div class="disease-buttons">
+                                <button onclick="findDoctors('general')" class="disease-btn">Fever</button>
+                                <button onclick="findDoctors('general')" class="disease-btn">Headache</button>
+                                <button onclick="findDoctors('general')" class="disease-btn">Body Pain</button>
+                            </div>
+                        </div>
+                        
+                        <div class="disease-category">
+                            <h3>🧠 Neurological</h3>
+                            <div class="disease-buttons">
+                                <button onclick="findDoctors('neurology')" class="disease-btn">Stroke</button>
+                                <button onclick="findDoctors('neurology')" class="disease-btn">Seizures</button>
+                                <button onclick="findDoctors('neurology')" class="disease-btn">Memory Loss</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="doctor-results" class="doctor-results" style="display: none;">
+                        <h3 id="selected-specialty"></h3>
+                        <div id="available-doctors"></div>
+                        <button onclick="showDoctorMap()" class="btn-primary">📍 View on Map</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hospital Dashboard -->
+    <div id="hospital-dashboard" class="page">
+        <!-- Header -->
+        <header class="hospital-header">
+            <div class="header-brand">
+                <i class="fas fa-hospital"></i>
+                Hospital Dashboard
+            </div>
+            <nav class="header-nav">
+                <a class="nav-link active" onclick="showHospitalPage('home')">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a class="nav-link" onclick="showHospitalPage('edit')">
+                    <i class="fas fa-edit"></i> Edit Hospital
+                </a>
+                <a class="nav-link" onclick="showHospitalPage('doctors')">
+                    <i class="fas fa-user-md"></i> Doctors
+                </a>
+                <a class="nav-link" onclick="showHospitalPage('status')">
+                    <i class="fas fa-chart-line"></i> Status
+                </a>
+                <a class="nav-link logout" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main class="hospital-main-content">
+            <!-- Home Page -->
+            <div id="hospital-home" class="hospital-page active">
+                <div class="hospital-card">
+                    <h2><i class="fas fa-hospital"></i> Apollo Hospital Chittoor</h2>
+                    <div class="hospital-info">
+                        <div class="info-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <h3>Location</h3>
+                            <p>123 Medical Street, Chittoor, AP 517001</p>
+                        </div>
+                        <div class="info-item">
+                            <i class="fas fa-phone"></i>
+                            <h3>Contact</h3>
+                            <p>+91-8572-225566</p>
+                        </div>
+                        <div class="info-item">
+                            <i class="fas fa-bed"></i>
+                            <h3>Total Beds</h3>
+                            <p>250 Beds Available</p>
+                        </div>
+                        <div class="info-item">
+                            <i class="fas fa-user-md"></i>
+                            <h3>Doctors</h3>
+                            <p>45 Specialists</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hospital-card">
+                    <h2><i class="fas fa-tachometer-alt"></i> Quick Actions</h2>
+                    <div class="quick-actions">
+                        <button class="action-btn" onclick="showHospitalPage('edit')">
+                            <i class="fas fa-edit"></i>
+                            Edit Hospital Info
+                        </button>
+                        <button class="action-btn" onclick="showHospitalPage('doctors')">
+                            <i class="fas fa-user-md"></i>
+                            Manage Doctors
+                        </button>
+                        <button class="action-btn" onclick="showHospitalPage('status')">
+                            <i class="fas fa-chart-line"></i>
+                            View Status
+                        </button>
+                        <button class="action-btn" onclick="addDoctor()">
+                            <i class="fas fa-plus"></i>
+                            Add New Doctor
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit Hospital -->
+            <div id="hospital-edit" class="hospital-page">
+                <div class="hospital-card">
+                    <h2><i class="fas fa-edit"></i> Edit Hospital Information</h2>
+                    <form id="hospitalForm">
+                        <div class="form-grid">
+                            <div>
+                                <div class="form-group">
+                                    <label>Hospital Name</label>
+                                    <input type="text" id="hospitalName" value="Apollo Hospital Chittoor" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Phone Number</label>
+                                    <input type="tel" id="hospitalPhone" value="+91-8572-225566" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" id="hospitalEmail" value="info@apollochittoor.com" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Total Beds</label>
+                                    <input type="number" id="totalBeds" value="250" required>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="form-group">
+                                    <label>Address</label>
+                                    <textarea id="hospitalAddress" required>123 Medical Street, Chittoor, Andhra Pradesh 517001</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>Latitude</label>
+                                    <input type="number" id="hospital-latitude" value="13.2172" step="any" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Longitude</label>
+                                    <input type="number" id="hospital-longitude" value="79.1003" step="any" required>
+                                </div>
+
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Hospital Location</label>
+                            <div class="location-controls">
+                                <button type="button" onclick="getHospitalLocation()" class="btn btn-secondary">
+                                    <i class="fas fa-map-marker-alt"></i> Get Current Location
+                                </button>
+                                <button type="button" onclick="showLocationMap()" class="btn btn-primary">
+                                    <i class="fas fa-map"></i> Select on Map
+                                </button>
+                            </div>
+                            <div id="editMap" class="map-container" style="display: none;"></div>
+                            <small style="color: #718096;">Use GPS for current location or select exact hospital location on map</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Doctors -->
+            <div id="hospital-doctors" class="hospital-page">
+                <div class="hospital-card">
+                    <h2><i class="fas fa-user-md"></i> Hospital Doctors</h2>
+                    <div class="doctors-grid" id="doctorsGrid">
+                        <!-- Doctors will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div id="hospital-status" class="hospital-page">
+                <div class="hospital-card">
+                    <h2><i class="fas fa-chart-line"></i> Doctor Availability Status Management</h2>
+                    <div class="status-overview">
+                        <div class="status-card available">
+                            <div class="status-number available" id="availableCount">0</div>
+                            <h3>Available</h3>
+                            <p>Doctors ready for consultation</p>
+                        </div>
+                        <div class="status-card busy">
+                            <div class="status-number busy" id="busyCount">0</div>
+                            <h3>Busy</h3>
+                            <p>Doctors currently with patients</p>
+                        </div>
+                        <div class="status-card unavailable">
+                            <div class="status-number unavailable" id="unavailableCount">0</div>
+                            <h3>Unavailable</h3>
+                            <p>Doctors off duty</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hospital-card">
+                    <h2><i class="fas fa-edit"></i> Update Doctor Status</h2>
+                    <div class="status-management-grid" id="statusManagement"></div>
+                </div>
+
+                <div class="hospital-card">
+                    <h2><i class="fas fa-list"></i> Status by Specialty</h2>
+                    <div id="specialtyStatus"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Medical Center Dashboard -->
+    <div id="medical-center-dashboard" class="page">
+        <nav class="navbar medical-center-nav">
+            <div class="nav-brand">🏥 Medical Center Portal</div>
+            <div class="nav-menu">
+                <a href="#" onclick="showMedicalSection('home')" class="nav-link active">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a href="#" onclick="showMedicalSection('profile')" class="nav-link">
+                    <i class="fas fa-user"></i> Profile
+                </a>
+                <a href="#" onclick="showMedicalSection('status')" class="nav-link">
+                    <i class="fas fa-chart-bar"></i> Status
+                </a>
+                <a href="#" onclick="logout()" class="nav-link logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </nav>
+
+        <div class="main-content-full">
+            <div id="medical-home-section" class="content-section active">
+                <div class="medical-welcome-header">
+                    <h1>🏥 Medical Center Dashboard</h1>
+                    <p>Manage your medical center operations and staff</p>
+                </div>
+                
+                <div class="medical-info-cards">
+                    <div class="medical-info-card">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <h3>Location</h3>
+                        <p>Chittoor, Andhra Pradesh</p>
+                    </div>
+                    <div class="medical-info-card">
+                        <i class="fas fa-phone"></i>
+                        <h3>Contact</h3>
+                        <p>+91-8772-234567</p>
+                    </div>
+                    <div class="medical-info-card">
+                        <i class="fas fa-users"></i>
+                        <h3>Staff Count</h3>
+                        <p id="medical-staff-count">5 Healthcare Workers</p>
+                    </div>
+                    <div class="medical-info-card">
+                        <i class="fas fa-clock"></i>
+                        <h3>Operating Hours</h3>
+                        <p>24/7 Emergency Care</p>
+                    </div>
+                </div>
+
+                <div class="medical-quick-actions">
+                    <button onclick="showMedicalSection('profile')" class="medical-action-btn">
+                        <i class="fas fa-edit"></i> Edit Profile
+                    </button>
+                    <button onclick="showMedicalSection('status')" class="medical-action-btn">
+                        <i class="fas fa-users"></i> Manage Staff
+                    </button>
+                    <button onclick="addWorker()" class="medical-action-btn">
+                        <i class="fas fa-plus"></i> Add Worker
+                    </button>
+                </div>
+            </div>
+
+            <div id="medical-profile-section" class="content-section">
+                <div class="medical-profile-header">
+                    <h2>🏥 Medical Center Profile</h2>
+                </div>
+                
+                <div class="medical-profile-card">
+                    <div class="medical-profile-info">
+                        <div class="info-group">
+                            <label>Medical Center Name:</label>
+                            <input type="text" value="Chittoor Medical Center">
+                        </div>
+                        <div class="info-group">
+                            <label>License Number:</label>
+                            <input type="text" value="MLC-2024-001">
+                        </div>
+                        <div class="info-group">
+                            <label>Phone:</label>
+                            <input type="tel" value="+91-8772-234567">
+                        </div>
+                        <div class="info-group">
+                            <label>Email:</label>
+                            <input type="email" value="info@chittoormedical.com">
+                        </div>
+                        <div class="info-group">
+                            <label>Address:</label>
+                            <textarea rows="3">123 Medical Street, Chittoor, AP - 517001</textarea>
+                        </div>
+                        <div class="info-group">
+                            <label>Operating Status:</label>
+                            <select>
+                                <option value="open" selected>Open</option>
+                                <option value="busy">Busy</option>
+                                <option value="closed">Closed</option>
+                            </select>
+                        </div>
+                        <div class="info-group">
+                            <label>Location (Lat, Lng):</label>
+                            <div class="location-inputs">
+                                <input type="number" id="medical-lat" value="13.2172" step="any">
+                                <input type="number" id="medical-lng" value="79.1003" step="any">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="medical-map-container">
+                        <h3>📍 Update Location</h3>
+                        <div id="medical-location-map" style="height: 300px; border-radius: 10px;"></div>
+                    </div>
+                    
+                    <div class="medical-profile-actions">
+                        <button onclick="saveMedicalProfile()" class="btn-primary medical-btn">💾 Save Profile</button>
+                        <button onclick="deleteMedicalProfile()" class="btn-danger medical-btn">🗑️ Delete Profile</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="medical-status-section" class="content-section">
+                <div class="medical-status-header">
+                    <h2>📊 Staff Status Management</h2>
+                </div>
+                
+                <div class="medical-status-overview">
+                    <div class="medical-status-card available">
+                        <h3 id="medical-available-count">3</h3>
+                        <p>Available</p>
+                    </div>
+                    <div class="medical-status-card busy">
+                        <h3 id="medical-busy-count">1</h3>
+                        <p>Busy</p>
+                    </div>
+                    <div class="medical-status-card unavailable">
+                        <h3 id="medical-unavailable-count">1</h3>
+                        <p>Unavailable</p>
+                    </div>
+                </div>
+
+                <div class="medical-workers-grid" id="medical-workers-grid">
+                    <!-- Workers will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    /* User Dashboard Gradients */
+    .user-nav { background: linear-gradient(135deg, #3498db, #2980b9); }
+    .user-welcome-header { text-align: center; padding: 2rem 0; background: linear-gradient(135deg, #3498db, #2980b9); color: white; border-radius: 15px; margin-bottom: 2rem; }
+    .user-info-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .user-info-card { background: white; padding: 1.5rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.1); text-align: center; border: 2px solid #3498db; }
+    .user-info-card i { font-size: 2rem; color: #3498db; margin-bottom: 1rem; }
+    .btn-primary { background: linear-gradient(135deg, #3498db, #2980b9) !important; }
+    
+    .medical-center-nav { background: linear-gradient(135deg, #2ed573, #17a2b8); }
+    .medical-welcome-header { text-align: center; padding: 2rem 0; background: linear-gradient(135deg, #2ed573, #17a2b8); color: white; border-radius: 15px; margin-bottom: 2rem; }
+    .medical-info-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .medical-info-card { background: white; padding: 1.5rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(46, 213, 115, 0.1); text-align: center; border: 2px solid #2ed573; }
+    .medical-info-card i { font-size: 2rem; color: #2ed573; margin-bottom: 1rem; }
+    .medical-quick-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .medical-action-btn { background: linear-gradient(135deg, #2ed573, #17a2b8); color: white; border: none; padding: 1rem 2rem; border-radius: 10px; cursor: pointer; font-size: 1rem; transition: transform 0.3s; }
+    .medical-action-btn:hover { transform: translateY(-2px); }
+    .medical-profile-header { text-align: center; margin-bottom: 2rem; }
+    .medical-profile-card { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(46, 213, 115, 0.1); border: 2px solid #2ed573; }
+    .medical-profile-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .medical-profile-actions { display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; }
+    .medical-btn { background: linear-gradient(135deg, #2ed573, #17a2b8) !important; }
+    .medical-status-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .medical-status-card { background: white; padding: 1.5rem; border-radius: 15px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .medical-status-card.available { border-left: 5px solid #2ed573; }
+    .medical-status-card.busy { border-left: 5px solid #ffa726; }
+    .medical-status-card.unavailable { border-left: 5px solid #ef5350; }
+    .medical-workers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+    .medical-worker-card { background: white; padding: 1.5rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(46, 213, 115, 0.1); border: 2px solid #2ed573; }
+    .medical-worker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .medical-worker-status { padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
+    .medical-worker-status.available { background: #e8f5e8; color: #2ed573; }
+    .medical-worker-status.busy { background: #fff3e0; color: #ffa726; }
+    .medical-worker-status.unavailable { background: #ffebee; color: #ef5350; }
+    .medical-status-select { padding: 0.5rem; border: 2px solid #2ed573; border-radius: 5px; background: white; }
+    .location-inputs { display: flex; gap: 1rem; }
+    .location-inputs input { flex: 1; }
+    .medical-map-container { margin-top: 2rem; }
+    </style>
+
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="admin-dashboard" class="page">
+        <nav class="navbar admin-nav">
+            <div class="nav-brand">⚙️ System Admin Dashboard</div>
+            <div class="nav-menu">
+                <a href="#" onclick="showAdminSection('home')" class="nav-link active">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a href="#" onclick="showAdminSection('hospitals')" class="nav-link">
+                    <i class="fas fa-hospital"></i> Manage Hospitals
+                </a>
+                <a href="#" onclick="showAdminSection('medical-centers')" class="nav-link">
+                    <i class="fas fa-clinic-medical"></i> Manage Medical Centers
+                </a>
+                <a href="#" onclick="showAdminSection('users')" class="nav-link">
+                    <i class="fas fa-users"></i> Manage Users
+                </a>
+                <a href="#" onclick="showAdminSection('reports')" class="nav-link">
+                    <i class="fas fa-chart-bar"></i> Reports / Analytics
+                </a>
+                <a href="#" onclick="showAdminSection('profile')" class="nav-link">
+                    <i class="fas fa-user-cog"></i> Profile
+                </a>
+                <a href="#" onclick="logout()" class="nav-link logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </nav>
+
+        <div class="main-content-full">
+            <!-- Home Section -->
+            <div id="admin-home-section" class="content-section active">
+                <div class="admin-welcome-header">
+                    <h1>System Overview</h1>
+                </div>
+                
+                <div class="admin-stats-cards">
+                    <div class="admin-stat-card">
+                        <i class="fas fa-hospital"></i>
+                        <h3>25</h3>
+                        <p>Total Hospitals</p>
+                        <small>Registered in system</small>
+                    </div>
+                    <div class="admin-stat-card">
+                        <i class="fas fa-clinic-medical"></i>
+                        <h3>18</h3>
+                        <p>Medical Centers</p>
+                        <small>Active facilities</small>
+                    </div>
+                    <div class="admin-stat-card">
+                        <i class="fas fa-users"></i>
+                        <h3>1,247</h3>
+                        <p>Registered Users</p>
+                        <small>Platform users</small>
+                    </div>
+                    <div class="admin-stat-card">
+                        <i class="fas fa-circle"></i>
+                        <h3>32</h3>
+                        <p>Active Now</p>
+                        <small>Currently online</small>
+                    </div>
+                </div>
+
+                <div class="admin-recent-activity">
+                    <h2>Recent Activity</h2>
+                    <div class="activity-feed">
+                        <div class="activity-item">
+                            <span class="activity-bullet">•</span>
+                            <span class="activity-text">New hospital registration: Apollo Medical Center</span>
+                        </div>
+                        <div class="activity-item">
+                            <span class="activity-bullet">•</span>
+                            <span class="activity-text">User account created: john.doe@email.com</span>
+                        </div>
+                        <div class="activity-item">
+                            <span class="activity-bullet">•</span>
+                            <span class="activity-text">Medical center updated: Primary Health Center</span>
+                        </div>
+                        <div class="activity-item">
+                            <span class="activity-bullet">•</span>
+                            <span class="activity-text">Doctor status changed: Dr. Smith - Available</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-quick-actions">
+                    <button onclick="showAdminSection('hospitals')" class="admin-action-btn">
+                        <i class="fas fa-hospital"></i> Manage Hospitals
+                    </button>
+                    <button onclick="showAdminSection('medical-centers')" class="admin-action-btn">
+                        <i class="fas fa-clinic-medical"></i> Manage Medical Centers
+                    </button>
+                    <button onclick="showAdminSection('users')" class="admin-action-btn">
+                        <i class="fas fa-users"></i> Manage Users
+                    </button>
+                    <button onclick="showAdminSection('reports')" class="admin-action-btn">
+                        <i class="fas fa-chart-bar"></i> View Reports
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manage Hospitals Section -->
+            <div id="admin-hospitals-section" class="content-section">
+                <div class="admin-section-header">
+                    <h2>🏥 Manage Hospitals</h2>
+                    <button onclick="approveAllHospitals()" class="btn-primary">Approve Pending</button>
+                </div>
+                
+                <div class="admin-hospitals-grid" id="admin-hospitals-grid">
+                    <!-- Hospital cards will be populated here -->
+                </div>
+            </div>
+
+            <!-- Manage Medical Centers Section -->
+            <div id="admin-medical-centers-section" class="content-section">
+                <div class="admin-section-header">
+                    <h2>🏥 Manage Medical Centers</h2>
+                    <button onclick="refreshMedicalCenters()" class="btn-primary">Refresh Data</button>
+                </div>
+                
+                <div class="admin-medical-centers-grid" id="admin-medical-centers-grid">
+                    <!-- Medical center cards will be populated here -->
+                </div>
+            </div>
+
+            <!-- Manage Users Section -->
+            <div id="admin-users-section" class="content-section">
+                <div class="admin-section-header">
+                    <h2>👥 Manage Users</h2>
+                    <input type="text" id="user-search" placeholder="Search users..." onkeyup="searchUsers()">
+                </div>
+                
+                <div class="admin-users-table">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <!-- User rows will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Reports Section -->
+            <div id="admin-reports-section" class="content-section">
+                <div class="admin-section-header">
+                    <h2>📊 Reports & Analytics</h2>
+                </div>
+                
+                <div class="admin-reports-grid">
+                    <div class="admin-report-card">
+                        <h3>Hospital Availability</h3>
+                        <div class="report-stats">
+                            <div class="stat-item">
+                                <span class="stat-number available">8</span>
+                                <span class="stat-label">Available</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-number busy">3</span>
+                                <span class="stat-label">Busy</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-number unavailable">1</span>
+                                <span class="stat-label">Full</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="admin-report-card">
+                        <h3>Doctor Status</h3>
+                        <div class="report-stats">
+                            <div class="stat-item">
+                                <span class="stat-number available">89</span>
+                                <span class="stat-label">Available</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-number busy">45</span>
+                                <span class="stat-label">Busy</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-number unavailable">22</span>
+                                <span class="stat-label">Off Duty</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="admin-report-card">
+                        <h3>Real-time Activity</h3>
+                        <div class="activity-list">
+                            <div class="activity-item">🏥 Apollo Hospital updated availability</div>
+                            <div class="activity-item">👤 New user registered: John Doe</div>
+                            <div class="activity-item">🏥 Medical Center added 2 workers</div>
+                            <div class="activity-item">⚕️ Dr. Smith status changed to Available</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Profile Section -->
+            <div id="admin-profile-section" class="content-section">
+                <div class="admin-section-header">
+                    <h2>👤 Admin Profile</h2>
+                </div>
+                
+                <div class="admin-profile-card">
+                    <div class="admin-profile-info">
+                        <div class="info-group">
+                            <label>Name:</label>
+                            <input type="text" id="admin-name" value="System Administrator">
+                        </div>
+                        <div class="info-group">
+                            <label>Email:</label>
+                            <input type="email" id="admin-email" value="admin@emergencycare.com">
+                        </div>
+                        <div class="info-group">
+                            <label>Phone:</label>
+                            <input type="tel" id="admin-phone" value="+91-9876543210">
+                        </div>
+                        <div class="info-group">
+                            <label>Current Password:</label>
+                            <input type="password" id="current-password" placeholder="Enter current password">
+                        </div>
+                        <div class="info-group">
+                            <label>New Password:</label>
+                            <input type="password" id="new-password" placeholder="Enter new password">
+                        </div>
+                        <div class="info-group">
+                            <label>Confirm Password:</label>
+                            <input type="password" id="confirm-password" placeholder="Confirm new password">
+                        </div>
+                    </div>
+                    
+                    <div class="admin-profile-actions">
+                        <button onclick="saveAdminProfile()" class="btn-primary">💾 Save Changes</button>
+                        <button onclick="changeAdminPassword()" class="btn-secondary">🔒 Change Password</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    /* Admin Dashboard Styles */
+    .admin-nav {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+    }
+
+    .admin-welcome-header {
+        text-align: center;
+        padding: 2rem 0;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 15px;
+        margin-bottom: 2rem;
+    }
+
+    .admin-stats-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .admin-stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.1);
+        text-align: center;
+        border: 2px solid #667eea;
+    }
+
+    .admin-stat-card i {
+        font-size: 2rem;
+        color: #667eea;
+        margin-bottom: 1rem;
+    }
+
+    .admin-stat-card h3 {
+        font-size: 2.5rem;
+        color: #667eea;
+        margin: 0.5rem 0;
+    }
+
+    .admin-quick-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .admin-action-btn {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        padding: 1rem 2rem;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: transform 0.3s;
+    }
+
+    .admin-action-btn:hover {
+        transform: translateY(-2px);
+    }
+
+    .admin-section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .admin-hospitals-grid, .admin-medical-centers-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .admin-hospital-card, .admin-medical-center-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-left: 5px solid #667eea;
+    }
+
+    .admin-users-table {
+        background: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .admin-users-table table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .admin-users-table th, .admin-users-table td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+
+    .admin-users-table th {
+        background: #667eea;
+        color: white;
+    }
+
+    .admin-reports-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .admin-report-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .report-stats {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 1rem;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-number {
+        display: block;
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-number.available { color: #27ae60; }
+    .stat-number.busy { color: #f39c12; }
+    .stat-number.unavailable { color: #e74c3c; }
+
+    .activity-list {
+        margin-top: 1rem;
+    }
+
+    .activity-item {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #eee;
+        font-size: 0.9rem;
+    }
+
+    .admin-profile-card {
+        background: white;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .admin-profile-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .admin-profile-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    .btn-secondary {
+        background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.3s;
+    }
+
+    .btn-secondary:hover {
+        transform: translateY(-2px);
+    }
+
+    .admin-recent-activity {
+        background: white;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        margin-top: 2rem;
+    }
+
+    .admin-recent-activity h2 {
+        color: #667eea;
+        margin-bottom: 1.5rem;
+        font-size: 1.5rem;
+    }
+
+    .activity-feed {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .activity-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #eee;
+    }
+
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+
+    .activity-bullet {
+        color: #667eea;
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+
+    .activity-text {
+        color: #4a5568;
+        font-size: 0.95rem;
+    }
+
+    .admin-stat-card small {
+        display: block;
+        color: #718096;
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+    }
+    </style>
+
+    <!-- AI Assistant Avatar - Hidden by default -->
+    <div class="ai-assistant" id="ai-assistant" onclick="toggleChat()" tabindex="0" role="button" aria-label="Open AI Assistant Chat" onkeydown="if(event.key==='Enter'||event.key===' ')toggleChat()" style="display: none;">
+        <div class="ai-avatar" id="ai-avatar">
+            <div id="lottie-container" style="width: 100%; height: 100%;"></div>
+        </div>
+        <div id="ai-status" class="sr-only" aria-live="polite">AI Assistant ready</div>
+    </div>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel" id="chat-panel">
+        <div class="chat-header">
+            🤖 AI Assistant
+            <span style="float: right; cursor: pointer;" onclick="toggleChat()">✕</span>
+        </div>
+        <div class="chat-content" id="chat-content">
+            <p style="color: #666; text-align: center; margin-top: 50px;">Hi! I'm your AI assistant. How can I help you find medical care today?</p>
+        </div>
+        <div class="chat-input">
+            <div class="chat-input-group">
+                <input type="text" placeholder="Ask me anything..." id="chat-input" onkeypress="handleChatInput(event)">
+                <button onclick="sendMessage()" class="search-icon-btn">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+            <button onclick="startVoiceChat()" style="background:#e74c3c;margin-left:5px;">🎤</button>
+        </div>
+    </div>
+
+    <!-- <script src="api.js"></script>
+    <script src="backend-integration.js"></script> -->
+    <script src="script.js"></script>
+    <script>
+        // Global navigation functions
+        function showMedicalSection(section) {
+            document.querySelectorAll('#medical-center-dashboard .content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('#medical-center-dashboard .nav-link').forEach(l => l.classList.remove('active'));
+            document.getElementById('medical-' + section + '-section').classList.add('active');
+            event.target.classList.add('active');
+            
+            // Load workers when status section is shown
+            if (section === 'status') {
+                renderMedicalWorkers();
+                updateMedicalStatusCounts();
+            }
+        }
+        
+        function showAdminSection(section) {
+            document.querySelectorAll('#admin-dashboard .content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('#admin-dashboard .nav-link').forEach(l => l.classList.remove('active'));
+            document.getElementById('admin-' + section + '-section').classList.add('active');
+            event.target.classList.add('active');
+            
+            // Load data for specific sections
+            if (section === 'hospitals') loadHospitals();
+            if (section === 'medical-centers') loadMedicalCenters();
+            if (section === 'users') loadUsers();
+        }
+    </script>
+    <script>
+        // Global user data storage
+        let currentUserData = {};
+        
+        // Auto-fill profile data based on signup
+        function fillProfileData(userData) {
+            currentUserData = userData;
+            
+            // Fill User Dashboard profile
+            if (document.getElementById('user-name')) {
+                document.getElementById('user-name').value = userData.name || '';
+                document.getElementById('user-email').value = userData.email || '';
+                document.getElementById('user-phone').value = userData.phone || '';
+            }
+            
+            // Fill Hospital Dashboard profile
+            if (document.getElementById('hospitalName')) {
+                document.getElementById('hospitalName').value = userData.name || '';
+                document.getElementById('hospitalPhone').value = userData.phone || '';
+                document.getElementById('hospitalEmail').value = userData.email || '';
+            }
+            
+            // Fill Medical Center Dashboard profile
+            const medicalNameInput = document.querySelector('#medical-center-dashboard input[value="Chittoor Medical Center"]');
+            const medicalPhoneInput = document.querySelector('#medical-center-dashboard input[value="+91-8772-234567"]');
+            const medicalEmailInput = document.querySelector('#medical-center-dashboard input[value="info@chittoormedical.com"]');
+            
+            if (medicalNameInput) medicalNameInput.value = userData.name || 'Medical Center';
+            if (medicalPhoneInput) medicalPhoneInput.value = userData.phone || '';
+            if (medicalEmailInput) medicalEmailInput.value = userData.email || '';
+            
+            // Fill Admin Dashboard profile
+            if (document.getElementById('admin-name')) {
+                document.getElementById('admin-name').value = userData.name || '';
+                document.getElementById('admin-email').value = userData.email || '';
+                document.getElementById('admin-phone').value = userData.phone || '';
+            }
+        }
+        
+        // Override signup form submission
+        document.addEventListener('DOMContentLoaded', function() {
+            const signupForm = document.getElementById('signup-form');
+            if (signupForm) {
+                signupForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const userData = {
+                        name: document.getElementById('signup-name').value,
+                        email: document.getElementById('signup-email').value,
+                        phone: document.getElementById('signup-phone').value,
+                        userType: document.getElementById('signup-user-type').value
+                    };
+                    
+                    // Store user data
+                    localStorage.setItem('userData', JSON.stringify(userData));
+                    
+                    // Fill profile data
+                    fillProfileData(userData);
+                    
+                    alert('Account created successfully!');
+                    showLogin();
+                });
+            }
+            
+            // Override login form submission
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const email = document.getElementById('login-email').value;
+                    const password = document.getElementById('login-password').value;
+                    const userType = document.getElementById('login-user-type').value;
+                    
+                    if (email && password && userType) {
+                        // Create user object for any valid email
+                        const user = {
+                            name: email.split('@')[0], // Use email prefix as name
+                            email: email,
+                            phone: '+91-9876543210', // Default phone
+                            userType: userType
+                        };
+                        
+                        // Fill profile data
+                        fillProfileData(user);
+                        
+                        // Show appropriate dashboard
+                        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+                        
+                        switch(userType) {
+                            case 'user':
+                                document.getElementById('user-dashboard').classList.add('active');
+                                break;
+                            case 'hospital':
+                                document.getElementById('hospital-dashboard').classList.add('active');
+                                loadDoctors(); // Load hospital doctors
+                                updateStatusCounts(); // Update status counts
+                                break;
+                            case 'medical-center':
+                                document.getElementById('medical-center-dashboard').classList.add('active');
+                                break;
+                            case 'admin':
+                                document.getElementById('admin-dashboard').classList.add('active');
+                                break;
+                        }
+                        
+                        // Show AI assistant after login
+                        document.getElementById('ai-assistant').style.display = 'block';
+                        loadAI();
+                        
+                        alert('Login successful!');
+                    } else {
+                        alert('Please fill all fields');
+                    }
+                });
+            }
+            
+            // Load user data on page load
+            const storedData = localStorage.getItem('userData');
+            if (storedData) {
+                const userData = JSON.parse(storedData);
+                fillProfileData(userData);
+            }
+        });
+        
+        // Helper functions for navigation
+        function showLogin() {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.getElementById('login-page').classList.add('active');
+        }
+        
+        function showSignup() {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.getElementById('signup-page').classList.add('active');
+        }
+        
+        // User dashboard navigation
+        function showSection(section) {
+            document.querySelectorAll('#user-dashboard .content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('#user-dashboard .nav-link').forEach(l => l.classList.remove('active'));
+            
+            document.getElementById(section + '-section').classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        // Medical center dashboard navigation
+        function showMedicalSection(section) {
+            document.querySelectorAll('#medical-center-dashboard .content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('#medical-center-dashboard .nav-link').forEach(l => l.classList.remove('active'));
+            
+            document.getElementById('medical-' + section + '-section').classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        // Admin dashboard navigation
+        function showAdminSection(section) {
+            document.querySelectorAll('#admin-dashboard .content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('#admin-dashboard .nav-link').forEach(l => l.classList.remove('active'));
+            
+            document.getElementById('admin-' + section + '-section').classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        // Make functions globally accessible
+        window.showMedicalSection = showMedicalSection;
+        window.showAdminSection = showAdminSection;
+    </script>
+    
+    <script>
+        // Medical Center specific data and functions - Global scope
+        window.workers = [
+            { id: 1, name: "Sarah Johnson", role: "Registered Nurse", services: "General Care, Patient Assessment", status: "available" },
+            { id: 2, name: "Dr. Michael Chen", role: "General Physician", services: "Consultation, Diagnosis", status: "busy" },
+            { id: 3, name: "Lisa Rodriguez", role: "Lab Technician", services: "Lab Work, Sample Analysis", status: "available" },
+            { id: 4, name: "Emily Davis", role: "Staff Nurse", services: "Patient Care, Medication", status: "unavailable" },
+            { id: 5, name: "James Wilson", role: "Pharmacist", services: "Medication, Consultation", status: "available" }
+        ];
+
+        window.medicalLocationMap;
+
+
+
+        window.initMedicalLocationMap = function() {
+            if (medicalLocationMap) {
+                medicalLocationMap.remove();
+            }
+            
+            const lat = parseFloat(document.getElementById('medical-lat').value) || 13.2172;
+            const lng = parseFloat(document.getElementById('medical-lng').value) || 79.1003;
+            
+            medicalLocationMap = L.map('medical-location-map').setView([lat, lng], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(medicalLocationMap);
+            
+            let marker = L.marker([lat, lng]).addTo(medicalLocationMap);
+            
+            medicalLocationMap.on('click', function(e) {
+                const newLat = e.latlng.lat.toFixed(6);
+                const newLng = e.latlng.lng.toFixed(6);
+                
+                document.getElementById('medical-lat').value = newLat;
+                document.getElementById('medical-lng').value = newLng;
+                
+                marker.setLatLng([newLat, newLng]);
+            });
+        };
+
+        window.renderMedicalWorkers = function() {
+            const grid = document.getElementById('medical-workers-grid');
+            if (!grid) return;
+            
+            grid.innerHTML = '';
+            
+            workers.forEach(worker => {
+                const card = document.createElement('div');
+                card.className = 'medical-worker-card';
+                card.innerHTML = `
+                    <div class="medical-worker-header">
+                        <h3>${worker.name}</h3>
+                        <span class="medical-worker-status ${worker.status}">${worker.status.charAt(0).toUpperCase() + worker.status.slice(1)}</span>
+                    </div>
+                    <p><strong>Role:</strong> ${worker.role}</p>
+                    <p><strong>Services:</strong> ${worker.services}</p>
+                    <div style="margin-top: 1rem;">
+                        <label>Update Status:</label>
+                        <select class="medical-status-select" onchange="updateWorkerStatus(${worker.id}, this.value)">
+                            <option value="available" ${worker.status === 'available' ? 'selected' : ''}>✅ Available</option>
+                            <option value="busy" ${worker.status === 'busy' ? 'selected' : ''}>🟡 Busy</option>
+                            <option value="unavailable" ${worker.status === 'unavailable' ? 'selected' : ''}>❌ Unavailable</option>
+                        </select>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        };
+
+        window.updateWorkerStatus = function(workerId, newStatus) {
+            const worker = workers.find(w => w.id === workerId);
+            if (worker) {
+                worker.status = newStatus;
+                renderMedicalWorkers();
+                updateMedicalStatusCounts();
+                
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed; top: 20px; right: 20px; background: #2ed573;
+                    color: white; padding: 15px 20px; border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000;
+                `;
+                notification.textContent = `✅ ${worker.name}'s status updated to ${newStatus}`;
+                document.body.appendChild(notification);
+                setTimeout(() => document.body.removeChild(notification), 3000);
+            }
+        };
+
+        window.updateMedicalStatusCounts = function() {
+            const available = workers.filter(w => w.status === 'available').length;
+            const busy = workers.filter(w => w.status === 'busy').length;
+            const unavailable = workers.filter(w => w.status === 'unavailable').length;
+            
+            document.getElementById('medical-available-count').textContent = available;
+            document.getElementById('medical-busy-count').textContent = busy;
+            document.getElementById('medical-unavailable-count').textContent = unavailable;
+            document.getElementById('medical-staff-count').textContent = `${workers.length} Healthcare Workers`;
+        };
+
+        window.addWorker = function() {
+            const name = prompt('Enter worker name:');
+            const role = prompt('Enter worker role:');
+            const services = prompt('Enter services provided:');
+            
+            if (name && role && services) {
+                const newWorker = {
+                    id: workers.length + 1,
+                    name: name,
+                    role: role,
+                    services: services,
+                    status: 'available'
+                };
+                workers.push(newWorker);
+                renderMedicalWorkers();
+                updateMedicalStatusCounts();
+                
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed; top: 20px; right: 20px; background: #2ed573;
+                    color: white; padding: 15px 20px; border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000;
+                `;
+                notification.textContent = `✅ ${name} added successfully!`;
+                document.body.appendChild(notification);
+                setTimeout(() => document.body.removeChild(notification), 3000);
+            }
+        };
+
+        window.saveMedicalProfile = function() {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed; top: 20px; right: 20px; background: #2ed573;
+                color: white; padding: 15px 20px; border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000;
+            `;
+            notification.textContent = 'Medical center profile saved successfully!';
+            document.body.appendChild(notification);
+            setTimeout(() => document.body.removeChild(notification), 3000);
+        };
+
+        window.deleteMedicalProfile = function() {
+            if (confirm('Are you sure you want to delete this medical center profile?')) {
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed; top: 20px; right: 20px; background: #ff4757;
+                    color: white; padding: 15px 20px; border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000;
+                `;
+                notification.textContent = '⚠️ Profile deletion initiated. Contact admin for completion.';
+                document.body.appendChild(notification);
+                setTimeout(() => document.body.removeChild(notification), 3000);
+            }
+        };
+
+        // Initialize medical center dashboard when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            updateMedicalStatusCounts();
+            renderMedicalWorkers();
+        });
+
+        // Admin Dashboard Functions - already defined above
+
+        function loadHospitals() {
+            const grid = document.getElementById('admin-hospitals-grid');
+            const hospitals = [
+                { name: 'Apollo Hospital', status: 'approved', doctors: 25, beds: 150 },
+                { name: 'AIIMS Chittoor', status: 'pending', doctors: 30, beds: 200 },
+                { name: 'Government Hospital', status: 'approved', doctors: 20, beds: 100 }
+            ];
+            
+            grid.innerHTML = hospitals.map(h => `
+                <div class="admin-hospital-card">
+                    <h3>${h.name}</h3>
+                    <p>Status: <span class="status-${h.status}">${h.status.toUpperCase()}</span></p>
+                    <p>Doctors: ${h.doctors} | Beds: ${h.beds}</p>
+                    <div style="margin-top: 1rem;">
+                        <button onclick="approveHospital('${h.name}')" class="btn-primary">Approve</button>
+                        <button onclick="editHospital('${h.name}')" class="btn-secondary">Edit</button>
+                        <button onclick="deleteHospital('${h.name}')" class="btn-danger">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadMedicalCenters() {
+            const grid = document.getElementById('admin-medical-centers-grid');
+            const centers = [
+                { name: 'Primary Health Center', workers: 15, status: 'active' },
+                { name: 'Community Health Center', workers: 12, status: 'active' },
+                { name: 'Urban Health Center', workers: 8, status: 'inactive' }
+            ];
+            
+            grid.innerHTML = centers.map(c => `
+                <div class="admin-medical-center-card">
+                    <h3>${c.name}</h3>
+                    <p>Workers: ${c.workers}</p>
+                    <p>Status: <span class="status-${c.status}">${c.status.toUpperCase()}</span></p>
+                    <div style="margin-top: 1rem;">
+                        <button onclick="editMedicalCenter('${c.name}')" class="btn-secondary">Edit</button>
+                        <button onclick="toggleCenterStatus('${c.name}')" class="btn-primary">Toggle Status</button>
+                        <button onclick="deleteMedicalCenter('${c.name}')" class="btn-danger">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadUsers() {
+            const tbody = document.getElementById('users-table-body');
+            const users = [
+                { name: 'John Doe', email: 'john@email.com', type: 'User', status: 'Active' },
+                { name: 'Dr. Smith', email: 'smith@hospital.com', type: 'Hospital', status: 'Active' },
+                { name: 'Jane Wilson', email: 'jane@email.com', type: 'User', status: 'Inactive' },
+                { name: 'Medical Center Admin', email: 'admin@medical.com', type: 'Medical Center', status: 'Active' }
+            ];
+            
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td>${u.type}</td>
+                    <td><span class="status-${u.status.toLowerCase()}">${u.status}</span></td>
+                    <td>
+                        <button onclick="toggleUserStatus('${u.email}')" class="btn-secondary">Toggle</button>
+                        <button onclick="deleteUser('${u.email}')" class="btn-danger">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        window.approveHospital = function(name) {
+            alert(`${name} approved successfully!`);
+            loadHospitals();
+        }
+
+        window.editHospital = function(name) {
+            alert(`Edit ${name} functionality would be implemented here`);
+        }
+
+        window.deleteHospital = function(name) {
+            if (confirm(`Delete ${name}?`)) {
+                alert(`${name} deleted successfully!`);
+                loadHospitals();
+            }
+        }
+
+        window.editMedicalCenter = function(name) {
+            alert(`Edit ${name} functionality would be implemented here`);
+        }
+
+        window.toggleCenterStatus = function(name) {
+            alert(`${name} status toggled successfully!`);
+            loadMedicalCenters();
+        }
+
+        window.deleteMedicalCenter = function(name) {
+            if (confirm(`Delete ${name}?`)) {
+                alert(`${name} deleted successfully!`);
+                loadMedicalCenters();
+            }
+        }
+
+        window.toggleUserStatus = function(email) {
+            alert(`User ${email} status toggled successfully!`);
+            loadUsers();
+        }
+
+        window.deleteUser = function(email) {
+            if (confirm(`Delete user ${email}?`)) {
+                alert(`User ${email} deleted successfully!`);
+                loadUsers();
+            }
+        }
+
+        window.searchUsers = function() {
+            const searchTerm = document.getElementById('user-search').value.toLowerCase();
+            const rows = document.querySelectorAll('#users-table-body tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        }
+
+        window.approveAllHospitals = function() {
+            alert('All pending hospitals approved!');
+            loadHospitals();
+        }
+
+        window.refreshMedicalCenters = function() {
+            alert('Medical centers data refreshed!');
+            loadMedicalCenters();
+        }
+
+        window.saveAdminProfile = function() {
+            alert('Admin profile saved successfully!');
+        }
+
+        window.changeAdminPassword = function() {
+            const current = document.getElementById('current-password').value;
+            const newPass = document.getElementById('new-password').value;
+            const confirm = document.getElementById('confirm-password').value;
+            
+            if (!current || !newPass || !confirm) {
+                alert('Please fill all password fields');
+                return;
+            }
+            
+            if (newPass !== confirm) {
+                alert('New passwords do not match');
+                return;
+            }
+            
+            alert('Password changed successfully!');
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+        }
+
+        // Global logout function
+        window.logout = function() {
+            if (confirm('Are you sure you want to logout?')) {
+                // Clear user data
+                currentUserData = {};
+                // Hide AI assistant
+                document.getElementById('ai-assistant').style.display = 'none';
+                // Hide all dashboards
+                document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+                // Show login page
+                document.getElementById('login-page').classList.add('active');
+                alert('Logged out successfully!');
+            }
+        }
+
+        // Sample Workers Data for the old dashboard
+        const oldWorkers = [
+            {
+                id: 1,
+                name: "Nurse Priya Sharma",
+                role: "Registered Nurse",
+                services: ["General Care", "Vaccination", "First Aid", "Patient Monitoring"],
+                status: "available",
+                experience: "8 years"
+            },
+            {
+                id: 2,
+                name: "Dr. Rajesh Kumar",
+                role: "General Physician",
+                services: ["General Consultation", "Basic Treatment", "Health Checkup"],
+                status: "busy",
+                experience: "12 years"
+            },
+            {
+                id: 3,
+                name: "Technician Anil Reddy",
+                role: "Lab Technician",
+                services: ["Blood Tests", "Urine Tests", "Basic Lab Work"],
+                status: "available",
+                experience: "6 years"
+            },
+            {
+                id: 4,
+                name: "Nurse Sunitha Rao",
+                role: "Staff Nurse",
+                services: ["Patient Care", "Medication", "Wound Dressing"],
+                status: "unavailable",
+                experience: "5 years"
+            },
+            {
+                id: 5,
+                name: "Pharmacist Venkat",
+                role: "Pharmacist",
+                services: ["Medicine Dispensing", "Drug Information", "Inventory"],
+                status: "available",
+                experience: "10 years"
+            }
+        ];
+
+        let medicalCenterMap = null;
+        let medicalCenterMarker = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadWorkers();
+            updateStatusCounts();
+            setupForm();
+            loadStatusManagement();
+        });
+
+        // Navigation
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
+            
+            document.getElementById(page).classList.add('active');
+            event.target.classList.add('active');
+            
+            if (page === 'profile') {
+                setTimeout(initializeMap, 100);
+            } else if (page === 'status') {
+                loadStatusManagement();
+            }
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                alert('Logged out successfully!');
+                // Redirect to login page
+            }
+        }
+
+        // Load Workers
+        function loadWorkers() {
+            const grid = document.getElementById('workersGrid');
+            if (!grid) return; // Exit if element doesn't exist
+            grid.innerHTML = workers.map(worker => `
+                <div class="worker-card">
+                    <div class="worker-header">
+                        <div class="worker-avatar">
+                            ${worker.name.charAt(0)}${worker.name.split(' ')[1].charAt(0)}
+                        </div>
+                        <div class="worker-info">
+                            <h3>${worker.name}</h3>
+                            <p>${worker.role} • ${worker.experience}</p>
+                        </div>
+                    </div>
+                    <div class="worker-specialties">
+                        <strong>Services:</strong><br>
+                        <span class="specialty-tag">${worker.services}</span>
+                    </div>
+                    <div class="worker-status">
+                        <span class="status-badge status-${worker.status}">
+                            ${worker.status.charAt(0).toUpperCase() + worker.status.slice(1)}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update Worker Status
+        function updateWorkerStatus(workerId, newStatus) {
+            const worker = workers.find(w => w.id === workerId);
+            const oldStatus = worker.status;
+            worker.status = newStatus;
+            
+            console.log(`Status updated: ${worker.name} changed from ${oldStatus} to ${newStatus}`);
+            
+            loadWorkers();
+            updateStatusCounts();
+            loadStatusManagement();
+            
+            showStatusUpdateNotification(worker.name, newStatus);
+        }
+
+        // Show status update notification
+        function showStatusUpdateNotification(workerName, status) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #2ed573;
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 1000;
+                font-weight: 500;
+            `;
+            notification.textContent = `✅ ${workerName} status updated to ${status.toUpperCase()}`;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 3000);
+        }
+
+        // Load Status Management
+        function loadStatusManagement() {
+            const grid = document.getElementById('statusManagement');
+            if (!grid) return; // Exit if element doesn't exist
+            grid.innerHTML = workers.map(worker => `
+                <div class="status-management-card">
+                    <div class="worker-header">
+                        <div class="worker-avatar" style="width: 40px; height: 40px; font-size: 16px;">
+                            ${worker.name.charAt(0)}${worker.name.split(' ')[1].charAt(0)}
+                        </div>
+                        <div style="margin-left: 15px; flex: 1;">
+                            <div class="worker-name">${worker.name}</div>
+                            <div class="worker-role">${worker.role}</div>
+                        </div>
+                        <span class="status-badge status-${worker.status}">
+                            ${worker.status.charAt(0).toUpperCase() + worker.status.slice(1)}
+                        </span>
+                    </div>
+                    <div class="status-update-form">
+                        <label style="font-weight: 600; color: #2d3748;">Update Status:</label>
+                        <select onchange="updateWorkerStatus(${worker.id}, this.value)" class="status-select">
+                            <option value="available" ${worker.status === 'available' ? 'selected' : ''}>✅ Available</option>
+                            <option value="busy" ${worker.status === 'busy' ? 'selected' : ''}>🟡 Busy</option>
+                            <option value="unavailable" ${worker.status === 'unavailable' ? 'selected' : ''}>❌ Unavailable</option>
+                        </select>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update Status Counts
+        function updateStatusCounts() {
+            const available = workers.filter(w => w.status === 'available').length;
+            const busy = workers.filter(w => w.status === 'busy').length;
+            const unavailable = workers.filter(w => w.status === 'unavailable').length;
+            
+            const availableEl = document.getElementById('availableCount');
+            const busyEl = document.getElementById('busyCount');
+            const unavailableEl = document.getElementById('unavailableCount');
+            
+            if (availableEl) availableEl.textContent = available;
+            if (busyEl) busyEl.textContent = busy;
+            if (unavailableEl) unavailableEl.textContent = unavailable;
+        }
+
+        // Initialize Map
+        function initializeMap() {
+            if (medicalCenterMap) {
+                medicalCenterMap.remove();
+            }
+            
+            const latEl = document.getElementById('center-latitude');
+            const lngEl = document.getElementById('center-longitude');
+            const lat = latEl ? parseFloat(latEl.value) : 13.2172;
+            const lng = lngEl ? parseFloat(lngEl.value) : 79.1003;
+            
+            medicalCenterMap = L.map('profileMap').setView([lat, lng], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(medicalCenterMap);
+            
+            medicalCenterMarker = L.marker([lat, lng]).addTo(medicalCenterMap);
+            
+            medicalCenterMap.on('click', function(e) {
+                const { lat, lng } = e.latlng;
+                const latEl = document.getElementById('center-latitude');
+                const lngEl = document.getElementById('center-longitude');
+                if (latEl) latEl.value = lat.toFixed(6);
+                if (lngEl) lngEl.value = lng.toFixed(6);
+                
+                if (medicalCenterMarker) {
+                    medicalCenterMap.removeLayer(medicalCenterMarker);
+                }
+                medicalCenterMarker = L.marker([lat, lng]).addTo(medicalCenterMap);
+            });
+        }
+
+        // Setup Form
+        function setupForm() {
+            const form = document.getElementById('centerForm');
+            if (!form) return; // Exit if form doesn't exist
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = {
+                    name: document.getElementById('centerName').value,
+                    phone: document.getElementById('centerPhone').value,
+                    email: document.getElementById('centerEmail').value,
+                    address: document.getElementById('centerAddress').value,
+                    latitude: document.getElementById('latitude').value,
+                    longitude: document.getElementById('longitude').value,
+                    license: document.getElementById('licenseNumber').value,
+                    status: document.getElementById('operatingStatus').value
+                };
+                
+                console.log('Medical center data updated:', formData);
+                alert('Medical center information updated successfully!');
+            });
+        }
+
+        // Delete Profile
+        function deleteProfile() {
+            if (confirm('Are you sure you want to delete this medical center profile? This action cannot be undone.')) {
+                alert('Profile deletion functionality would be implemented here');
+            }
+        }
+
+        // Add Worker
+        function addWorker() {
+            const name = prompt('Enter worker name:');
+            const role = prompt('Enter role (e.g., Nurse, Technician):');
+            const services = prompt('Enter services provided (comma separated):');
+            
+            if (name && role && services) {
+                const newWorker = {
+                    id: workers.length + 1,
+                    name: name,
+                    role: role,
+                    services: services.split(',').map(s => s.trim()),
+                    status: 'available',
+                    experience: '2 years'
+                };
+                
+                workers.push(newWorker);
+                loadWorkers();
+                updateStatusCounts();
+                loadStatusManagement();
+                alert('Worker added successfully!');
+            }
+        }
+
+        // View Reports
+        function viewReports() {
+            alert('Reports functionality would be implemented here');
+        }
+
+        // Disease-based hospital mapping functionality
+        const hospitalData = [
+            {
+                id: 1,
+                name: "Apollo Hospital Chittoor",
+                lat: 13.2172,
+                lng: 79.1003,
+                specialties: ['cardiology', 'orthopedics', 'emergency', 'general', 'neurology'],
+                doctors: {
+                    cardiology: { available: 2, total: 3 },
+                    orthopedics: { available: 1, total: 2 },
+                    emergency: { available: 3, total: 4 },
+                    general: { available: 4, total: 5 },
+                    neurology: { available: 1, total: 2 },
+                    pediatrics: { available: 2, total: 2 }
+                },
+                phone: "+91-8572-225566",
+                address: "123 Medical Street, Chittoor"
+            },
+            {
+                id: 2,
+                name: "AIIMS Chittoor",
+                lat: 13.2200,
+                lng: 79.1050,
+                specialties: ['cardiology', 'neurology', 'emergency', 'general', 'pediatrics'],
+                doctors: {
+                    cardiology: { available: 3, total: 4 },
+                    orthopedics: { available: 0, total: 1 },
+                    emergency: { available: 2, total: 3 },
+                    general: { available: 3, total: 4 },
+                    neurology: { available: 2, total: 3 },
+                    pediatrics: { available: 1, total: 2 }
+                },
+                phone: "+91-8572-334455",
+                address: "456 Health Avenue, Chittoor"
+            },
+            {
+                id: 3,
+                name: "Government Hospital",
+                lat: 13.2100,
+                lng: 79.0950,
+                specialties: ['emergency', 'general', 'pediatrics', 'orthopedics'],
+                doctors: {
+                    cardiology: { available: 0, total: 1 },
+                    orthopedics: { available: 2, total: 2 },
+                    emergency: { available: 4, total: 5 },
+                    general: { available: 5, total: 6 },
+                    neurology: { available: 0, total: 0 },
+                    pediatrics: { available: 3, total: 3 }
+                },
+                phone: "+91-8572-112233",
+                address: "789 Government Road, Chittoor"
+            },
+            {
+                id: 4,
+                name: "City Medical Center",
+                lat: 13.2250,
+                lng: 79.1100,
+                specialties: ['general', 'pediatrics', 'emergency'],
+                doctors: {
+                    cardiology: { available: 1, total: 1 },
+                    orthopedics: { available: 0, total: 0 },
+                    emergency: { available: 2, total: 2 },
+                    general: { available: 3, total: 4 },
+                    neurology: { available: 0, total: 0 },
+                    pediatrics: { available: 2, total: 3 }
+                },
+                phone: "+91-8572-998877",
+                address: "321 City Center, Chittoor"
+            }
+        ];
+
+        // Medical center data
+        const medicalCenterData = [
+            {
+                id: 1,
+                name: "Primary Health Center Chittoor",
+                lat: 13.2150,
+                lng: 79.0980,
+                specialties: ['general', 'pediatrics', 'emergency'],
+                staff: {
+                    cardiology: { available: 0, total: 0 },
+                    orthopedics: { available: 1, total: 1 },
+                    emergency: { available: 2, total: 2 },
+                    general: { available: 3, total: 4 },
+                    neurology: { available: 0, total: 0 },
+                    pediatrics: { available: 2, total: 2 }
+                },
+                phone: "+91-8572-445566",
+                address: "456 Health Avenue, Chittoor"
+            },
+            {
+                id: 2,
+                name: "Community Health Center",
+                lat: 13.2080,
+                lng: 79.1020,
+                specialties: ['general', 'pediatrics', 'emergency'],
+                staff: {
+                    cardiology: { available: 1, total: 1 },
+                    orthopedics: { available: 0, total: 0 },
+                    emergency: { available: 3, total: 3 },
+                    general: { available: 4, total: 5 },
+                    neurology: { available: 0, total: 0 },
+                    pediatrics: { available: 3, total: 3 }
+                },
+                phone: "+91-8572-667788",
+                address: "789 Community Road, Chittoor"
+            },
+            {
+                id: 3,
+                name: "Urban Health Clinic",
+                lat: 13.2300,
+                lng: 79.1150,
+                specialties: ['general', 'emergency'],
+                staff: {
+                    cardiology: { available: 0, total: 0 },
+                    orthopedics: { available: 1, total: 1 },
+                    emergency: { available: 2, total: 2 },
+                    general: { available: 2, total: 3 },
+                    neurology: { available: 0, total: 0 },
+                    pediatrics: { available: 1, total: 1 }
+                },
+                phone: "+91-8572-889900",
+                address: "321 Urban Center, Chittoor"
+            }
+        ];
+
+        let diseaseMap = null;
+        let diseaseMarkers = [];
+
+        // Find doctors based on specialty
+        window.findDoctors = function(specialty) {
+            // Show results section
+            document.getElementById('doctor-results').style.display = 'block';
+            document.getElementById('selected-specialty').textContent = `Available ${specialty.charAt(0).toUpperCase() + specialty.slice(1)} Specialists`;
+            
+            // Filter hospitals with available doctors for this specialty
+            const availableHospitals = hospitalData.filter(hospital => {
+                return hospital.doctors[specialty] && hospital.doctors[specialty].available > 0;
+            });
+            
+            // Filter medical centers with available staff for this specialty
+            const availableMedicalCenters = medicalCenterData.filter(center => {
+                return center.staff[specialty] && center.staff[specialty].available > 0;
+            });
+            
+            // Display available doctors and staff
+            const doctorsContainer = document.getElementById('available-doctors');
+            if (availableHospitals.length === 0 && availableMedicalCenters.length === 0) {
+                doctorsContainer.innerHTML = '<p style="color: #e74c3c; text-align: center;">❌ No available specialists found for this condition</p>';
+                return;
+            }
+            
+            let htmlContent = '';
+            
+            // Add hospitals
+            if (availableHospitals.length > 0) {
+                htmlContent += '<h4 style="color: #3498db; margin: 1rem 0 0.5rem 0;">🏥 Hospitals</h4>';
+                htmlContent += availableHospitals.map(hospital => {
+                    const doctorInfo = hospital.doctors[specialty];
+                    return `
+                        <div class="doctor-card" style="background: white; padding: 1rem; margin: 0.5rem 0; border-radius: 10px; border-left: 4px solid #3498db; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <h4 style="color: #2c3e50; margin: 0 0 0.5rem 0;">🏥 ${hospital.name}</h4>
+                            <p style="margin: 0.25rem 0; color: #27ae60;">✅ Available Doctors: ${doctorInfo.available}/${doctorInfo.total}</p>
+                            <p style="margin: 0.25rem 0; color: #7f8c8d;">📍 ${hospital.address}</p>
+                            <p style="margin: 0.25rem 0; color: #7f8c8d;">📞 ${hospital.phone}</p>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            // Add medical centers
+            if (availableMedicalCenters.length > 0) {
+                htmlContent += '<h4 style="color: #2ed573; margin: 1rem 0 0.5rem 0;">🏥 Medical Centers</h4>';
+                htmlContent += availableMedicalCenters.map(center => {
+                    const staffInfo = center.staff[specialty];
+                    return `
+                        <div class="doctor-card" style="background: white; padding: 1rem; margin: 0.5rem 0; border-radius: 10px; border-left: 4px solid #2ed573; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <h4 style="color: #2c3e50; margin: 0 0 0.5rem 0;">🏥 ${center.name}</h4>
+                            <p style="margin: 0.25rem 0; color: #27ae60;">✅ Available Staff: ${staffInfo.available}/${staffInfo.total}</p>
+                            <p style="margin: 0.25rem 0; color: #7f8c8d;">📍 ${center.address}</p>
+                            <p style="margin: 0.25rem 0; color: #7f8c8d;">📞 ${center.phone}</p>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            doctorsContainer.innerHTML = htmlContent;
+            
+            // Store selected specialty for map display
+            window.selectedSpecialty = specialty;
+            window.availableHospitalsForSpecialty = availableHospitals;
+            window.availableMedicalCentersForSpecialty = availableMedicalCenters;
+        }
+
+        // Show doctor map
+        window.showDoctorMap = function() {
+            if (!window.selectedSpecialty) {
+                alert('Please select a health problem first!');
+                return;
+            }
+            
+            // Switch to map section
+            showSection('map');
+            
+            // Initialize disease map after a short delay
+            setTimeout(() => {
+                initializeDiseaseMap();
+            }, 300);
+        }
+
+        // Initialize disease-specific map
+        function initializeDiseaseMap() {
+            const mapContainer = document.getElementById('map');
+            
+            // Clear existing map
+            if (diseaseMap) {
+                diseaseMap.remove();
+            }
+            
+            // Create new map
+            diseaseMap = L.map('map').setView([13.2172, 79.1003], 12);
+            
+            // Add tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(diseaseMap);
+            
+            // Clear existing markers
+            diseaseMarkers.forEach(marker => diseaseMap.removeLayer(marker));
+            diseaseMarkers = [];
+            
+            let totalFacilities = 0;
+            
+            // Add markers for available hospitals
+            if (window.availableHospitalsForSpecialty) {
+                window.availableHospitalsForSpecialty.forEach(hospital => {
+                const doctorInfo = hospital.doctors[window.selectedSpecialty];
+                
+                // Create custom icon based on availability
+                const iconColor = doctorInfo.available > 2 ? 'green' : doctorInfo.available > 0 ? 'orange' : 'red';
+                const customIcon = L.divIcon({
+                    html: `<div style="background: ${iconColor}; width: 25px; height: 25px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">🏥</div>`,
+                    className: 'custom-hospital-icon',
+                    iconSize: [25, 25],
+                    iconAnchor: [12, 12]
+                });
+                
+                // Create marker
+                const marker = L.marker([hospital.lat, hospital.lng], { icon: customIcon }).addTo(diseaseMap);
+                
+                // Create popup content
+                const popupContent = `
+                    <div style="min-width: 250px; font-family: Arial, sans-serif;">
+                        <h3 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 16px;">🏥 ${hospital.name}</h3>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+                            <p style="margin: 5px 0; color: #27ae60; font-weight: bold;">✅ ${window.selectedSpecialty.charAt(0).toUpperCase() + window.selectedSpecialty.slice(1)} Specialists</p>
+                            <p style="margin: 5px 0; color: #2980b9;">👨‍⚕️ Available: ${doctorInfo.available}/${doctorInfo.total} doctors</p>
+                        </div>
+                        <p style="margin: 5px 0; color: #7f8c8d; font-size: 14px;">📍 ${hospital.address}</p>
+                        <p style="margin: 5px 0; color: #7f8c8d; font-size: 14px;">📞 ${hospital.phone}</p>
+                        <div style="margin-top: 10px; text-align: center;">
+                            <button onclick="contactHospital('${hospital.name}', '${hospital.phone}')" style="background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-size: 14px;">📞 Contact Hospital</button>
+                        </div>
+                    </div>
+                `;
+                
+                    marker.bindPopup(popupContent);
+                    diseaseMarkers.push(marker);
+                });
+                totalFacilities += window.availableHospitalsForSpecialty.length;
+            }
+            
+            // Add markers for available medical centers
+            if (window.availableMedicalCentersForSpecialty) {
+                window.availableMedicalCentersForSpecialty.forEach(center => {
+                    const staffInfo = center.staff[window.selectedSpecialty];
+                    
+                    // Create custom icon based on availability (green theme for medical centers)
+                    const iconColor = staffInfo.available > 2 ? '#2ed573' : staffInfo.available > 0 ? '#17a2b8' : '#e74c3c';
+                    const customIcon = L.divIcon({
+                        html: `<div style="background: ${iconColor}; width: 25px; height: 25px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">🏥</div>`,
+                        className: 'custom-medical-icon',
+                        iconSize: [25, 25],
+                        iconAnchor: [12, 12]
+                    });
+                    
+                    // Create marker
+                    const marker = L.marker([center.lat, center.lng], { icon: customIcon }).addTo(diseaseMap);
+                    
+                    // Create popup content
+                    const popupContent = `
+                        <div style="min-width: 250px; font-family: Arial, sans-serif;">
+                            <h3 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 16px;">🏥 ${center.name}</h3>
+                            <div style="background: #e8f5e8; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+                                <p style="margin: 5px 0; color: #27ae60; font-weight: bold;">✅ ${window.selectedSpecialty.charAt(0).toUpperCase() + window.selectedSpecialty.slice(1)} Care</p>
+                                <p style="margin: 5px 0; color: #2ed573;">👩⚕️ Available: ${staffInfo.available}/${staffInfo.total} staff</p>
+                            </div>
+                            <p style="margin: 5px 0; color: #7f8c8d; font-size: 14px;">📍 ${center.address}</p>
+                            <p style="margin: 5px 0; color: #7f8c8d; font-size: 14px;">📞 ${center.phone}</p>
+                            <div style="margin-top: 10px; text-align: center;">
+                                <button onclick="contactHospital('${center.name}', '${center.phone}')" style="background: #2ed573; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-size: 14px;">📞 Contact Center</button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    marker.bindPopup(popupContent);
+                    diseaseMarkers.push(marker);
+                });
+                totalFacilities += window.availableMedicalCentersForSpecialty.length;
+            }
+            
+            // Show notification
+            showMapNotification(`Found ${totalFacilities} healthcare facilities with available ${window.selectedSpecialty} specialists`);
+        }
+
+        // Contact hospital function
+        window.contactHospital = function(hospitalName, phone) {
+            const message = `Contacting ${hospitalName} at ${phone}\n\nThis would typically:\n• Call the hospital directly\n• Send emergency notification\n• Book appointment\n• Get directions`;
+            alert(message);
+        }
+
+        // Show map notification
+        function showMapNotification(message) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #3498db, #2980b9);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+                z-index: 1000;
+                font-weight: 500;
+                max-width: 300px;
+                font-size: 14px;
+            `;
+            notification.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${message}`;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 5000);
+        }
+
+
+
+        function handleChatInput(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            handleVoiceInput(message);
+            input.value = '';
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAI(); // Load the colorful AI animation
+            updateMedicalStatusCounts();
+            renderMedicalWorkers();
+        });
+
+        // Fix missing toggleChat function
+        window.toggleChat = function() {
+            const panel = document.getElementById('chat-panel');
+            if (panel) panel.classList.toggle('active');
+        };
+
+        window.initAIAssistant = function() {
+            const container = document.getElementById('lottie-container');
+            if (container && !container.innerHTML) {
+                container.innerHTML = `
+                    <div class="unity-avatar">
+                        <div class="character">
+                            <div class="head">
+                                <div class="face">
+                                    <div class="eye left"></div>
+                                    <div class="eye right"></div>
+                                    <div class="mouth"></div>
+                                    <div class="cheek left-cheek"></div>
+                                    <div class="cheek right-cheek"></div>
+                                </div>
+                                <div class="hair"></div>
+                            </div>
+                            <div class="torso">
+                                <div class="chest"></div>
+                                <div class="belly"></div>
+                            </div>
+                            <div class="arm left-arm">
+                                <div class="upper-arm"></div>
+                                <div class="forearm"></div>
+                                <div class="hand"></div>
+                            </div>
+                            <div class="arm right-arm">
+                                <div class="upper-arm"></div>
+                                <div class="forearm"></div>
+                                <div class="hand"></div>
+                            </div>
+                            <div class="leg left-leg">
+                                <div class="thigh"></div>
+                                <div class="shin"></div>
+                                <div class="foot"></div>
+                            </div>
+                            <div class="leg right-leg">
+                                <div class="thigh"></div>
+                                <div class="shin"></div>
+                                <div class="foot"></div>
+                            </div>
+                        </div>
+                        <div class="energy-aura"></div>
+                        <div class="particles"></div>
+                    </div>
+                `;
+            }
+        };
+
+        window.handleChatInput = function(event) {
+            if (event.key === 'Enter') sendMessage();
+        };
+
+        window.sendMessage = function() {
+            const input = document.getElementById('chat-input');
+            const content = document.getElementById('chat-content');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            content.innerHTML += `<div style="text-align:right;margin:10px 0;"><span style="background:#4ECDC4;color:white;padding:8px 12px;border-radius:15px;">${message}</span></div>`;
+            input.value = '';
+            
+            setTimeout(() => {
+                let response = getAIResponse(message);
+                content.innerHTML += `<div style="margin:10px 0;"><span style="background:#f0f0f0;padding:8px 12px;border-radius:15px;">${response}</span></div>`;
+                content.scrollTop = content.scrollHeight;
+            }, 1000);
+        };
+        
+        function getAIResponse(message) {
+            const msg = message.toLowerCase();
+            
+            // Status queries
+            if (msg.includes('status') || msg.includes('availability') || msg.includes('available')) {
+                return '📊 Current Hospital Status in Madanapalle:<br>🟢 Apollo Hospital: Available (15 doctors, 25 beds)<br>🟢 AIIMS Madanapalle: Available (20 doctors, 30 beds)<br>🟡 Government Hospital: Busy (12 doctors, 20 beds)<br><button onclick="showSection(\'map\')">View Live Status</button>';
+            }
+            
+            // Profile queries
+            if (msg.includes('profile') || msg.includes('my profile') || msg.includes('account')) {
+                const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+                return `👤 Your Profile Info:<br>Name: ${userData.name || 'Not set'}<br>Email: ${userData.email || 'Not set'}<br>Phone: ${userData.phone || 'Not set'}<br>User Type: ${userData.userType || 'User'}<br><button onclick="showSection('profile')">Edit Profile</button>`;
+            }
+            
+            // Contact queries
+            if (msg.includes('contact') || msg.includes('phone') || msg.includes('call')) {
+                return '📞 Emergency Contacts:<br>🚨 Emergency: 108<br>🏥 Apollo Hospital: +91-8571-225566<br>🏥 AIIMS Madanapalle: +91-8571-334455<br>🏥 Government Hospital: +91-8571-112233<br>🏥 Primary Health Center: +91-8571-445566';
+            }
+            
+            // Names/doctors queries
+            if (msg.includes('names') || msg.includes('doctor names') || msg.includes('who are')) {
+                return '👨‍⚕️ Available Doctors:<br>🏥 Apollo: Dr. Rajesh Kumar (Cardiology), Dr. Anil Reddy (Orthopedics)<br>🏥 AIIMS: Dr. Priya Sharma (Neurology), Dr. Sunitha Rao (Pediatrics)<br>🏥 Government: Dr. Venkat Rao (General), Dr. Lakshmi Devi (Gynecology)<br><button onclick="showSection(\'health-problems\')">Find Specialists</button>';
+            }
+            
+            // Map queries
+            if (msg.includes('map') || msg.includes('location') || msg.includes('where') || msg.includes('address') || msg.includes('directions')) {
+                return '🗺️ Hospital Locations in Madanapalle:<br>📍 Apollo Hospital: 123 Medical Street<br>📍 AIIMS: 456 Health Avenue<br>📍 Government Hospital: 789 Government Road<br>📍 Primary Health Center: 456 Health Avenue<br><button onclick="showSection(\'map\')">Open Interactive Map</button>';
+            }
+            
+            // Emergency responses
+            if (msg.includes('emergency') || msg.includes('urgent') || msg.includes('help')) {
+                return '🚨 For life-threatening emergencies, call 108 immediately! I found 3 nearby hospitals in Madanapalle: Apollo Hospital (2.1km), AIIMS (2.8km), Government Hospital (1.9km). <button onclick="showSection(\'map\')">View on Map</button>';
+            }
+            
+            // Hospital queries
+            if (msg.includes('hospital') || msg.includes('doctor')) {
+                return '🏥 I found 3 hospitals in Madanapalle with available doctors. Apollo Hospital has 15 doctors available, AIIMS has 20 doctors, and Government Hospital has 12 doctors. <button onclick="showSection(\'map\')">Show Hospitals</button>';
+            }
+            
+            // Health problems
+            if (msg.includes('heart') || msg.includes('chest pain') || msg.includes('cardiac')) {
+                return '❤️ For heart-related issues, I recommend cardiologists. Apollo Hospital has 2 cardiologists available, AIIMS has 3 available. <button onclick="findDoctors(\'cardiology\')">Find Cardiologists</button>';
+            }
+            
+            if (msg.includes('bone') || msg.includes('fracture') || msg.includes('joint')) {
+                return '🦴 For bone and joint issues, you need orthopedic specialists. Government Hospital has 2 orthopedic doctors available. <button onclick="findDoctors(\'orthopedics\')">Find Orthopedic Doctors</button>';
+            }
+            
+            if (msg.includes('child') || msg.includes('baby') || msg.includes('pediatric')) {
+                return '👶 For children\'s health, I recommend pediatricians. AIIMS has 1 pediatrician available, Government Hospital has 3 pediatricians. <button onclick="findDoctors(\'pediatrics\')">Find Pediatricians</button>';
+            }
+            
+            // General greetings
+            if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey')) {
+                return '👋 Hello! I\'m your medical assistant. I can help you find hospitals, doctors, and medical care in Madanapalle. What do you need help with today?';
+            }
+            
+            // Default response
+            return '🤖 I can help you with:<br>📊 Hospital Status & Availability<br>👤 Your Profile Information<br>📞 Contact Numbers<br>👨‍⚕️ Doctor Names & Specialties<br>🗺️ Maps & Locations<br>🚨 Emergency Services<br>What would you like to know?';
+        }
+
+        window.startVoiceChat = function() {
+            if ('webkitSpeechRecognition' in window) {
+                const recognition = new webkitSpeechRecognition();
+                recognition.start();
+                recognition.onresult = (e) => {
+                    document.getElementById('chat-input').value = e.results[0][0].transcript;
+                    sendMessage();
+                };
+            }
+        };
+
+    </script>
+</body>
+</html>
