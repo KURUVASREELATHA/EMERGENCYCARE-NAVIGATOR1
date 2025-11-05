@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "EmergencyCare Navigator - Static Frontend",
   "scripts": {
-    "build": "echo 'Static site - no build needed'",
+    "installBranch": "echo 'No build needed for static site'",
+    "build": "echo 'Static site ready'",
     "start": "echo 'Static site deployed'"
   },
   "keywords": ["emergency", "healthcare", "navigator"],
