@@ -577,12 +577,68 @@ function showSignup() {
     document.getElementById('signup-page').classList.add('active');
 }
 
+// Firebase Authentication
+let firebaseAuth = null;
+let firebaseDb = null;
+
+// Initialize Firebase
+function initFirebase() {
+    if (typeof firebase !== 'undefined') {
+        firebaseAuth = firebase.auth();
+        firebaseDb = firebase.firestore();
+        
+        // Check if user is already logged in
+        firebaseAuth.onAuthStateChanged(user => {
+            if (user) {
+                getUserData(user.uid);
+            }
+        });
+    }
+}
+
+// Get user data from Firestore
+async function getUserData(uid) {
+    try {
+        const doc = await firebaseDb.collection('users').doc(uid).get();
+        if (doc.exists) {
+            const userData = doc.data();
+            currentUser = { ...userData, uid };
+            showDashboard(userData.userType);
+        }
+    } catch (error) {
+        console.error('Error getting user data:', error);
+    }
+}
+
+// Show appropriate dashboard
+function showDashboard(userType) {
+    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+    
+    switch(userType) {
+        case 'user':
+            document.getElementById('user-dashboard').classList.add('active');
+            const emailInput = document.getElementById('user-email');
+            if (emailInput && currentUser) emailInput.value = currentUser.email;
+            break;
+        case 'hospital':
+            document.getElementById('hospital-dashboard').classList.add('active');
+            break;
+        case 'medical-center':
+            document.getElementById('medical-center-dashboard').classList.add('active');
+            break;
+        case 'admin':
+            document.getElementById('admin-dashboard').classList.add('active');
+            break;
+    }
+}
+
 // Initialize authentication
 document.addEventListener('DOMContentLoaded', function() {
     initVoice();
+    initFirebase();
     
     // Login Form Handler
-    document.getElementById('login-form').addEventListener('submit', function(e) {
+    document.getElementById('login-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const email = document.getElementById('login-email').value;
@@ -590,25 +646,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const userType = document.getElementById('login-user-type').value;
         
         if (email && password && userType) {
-            currentUser = { email, userType };
-            
-            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-            
-            switch(userType) {
-                case 'user':
-                    document.getElementById('user-dashboard').classList.add('active');
-                    const emailInput = document.getElementById('user-email');
-                    if (emailInput) emailInput.value = email;
-                    break;
-                case 'hospital':
-                    document.getElementById('hospital-dashboard').classList.add('active');
-                    break;
-                case 'medical-center':
-                    document.getElementById('medical-center-dashboard').classList.add('active');
-                    break;
-                case 'admin':
-                    document.getElementById('admin-dashboard').classList.add('active');
-                    break;
+            try {
+                const userCredential = await firebaseAuth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // Get user data from Firestore
+                const doc = await firebaseDb.collection('users').doc(user.uid).get();
+                if (doc.exists) {
+                    const userData = doc.data();
+                    if (userData.userType === userType) {
+                        currentUser = { ...userData, uid: user.uid };
+                        showDashboard(userType);
+                    } else {
+                        alert('Invalid user type selected');
+                        await firebaseAuth.signOut();
+                    }
+                } else {
+                    alert('User data not found');
+                    await firebaseAuth.signOut();
+                }
+            } catch (error) {
+                alert('Login failed: ' + error.message);
             }
         } else {
             alert('Please fill all fields');
@@ -616,7 +674,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Signup Form Handler
-    document.getElementById('signup-form').addEventListener('submit', function(e) {
+    document.getElementById('signup-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const name = document.getElementById('signup-name').value;
@@ -632,8 +690,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (name && email && phone && password && userType) {
-            alert('Account created successfully! Please login.');
-            showLogin();
+            try {
+                const userCredential = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // Store user data in Firestore
+                await firebaseDb.collection('users').doc(user.uid).set({
+                    name,
+                    email,
+                    phone,
+                    userType,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                alert('Account created successfully! Please login.');
+                showLogin();
+            } catch (error) {
+                alert('Signup failed: ' + error.message);
+            }
         } else {
             alert('Please fill all fields');
         }
@@ -1090,7 +1164,51 @@ function forceInitMap() {
     }, 100);
 }
 
-function logout() {
-    currentUser = null;
-    showLogin();
+async function logout() {
+    try {
+        if (firebaseAuth) {
+            await firebaseAuth.signOut();
+        }
+        currentUser = null;
+        showLogin();
+    } catch (error) {
+        console.error('Logout error:', error);
+        currentUser = null;
+        showLogin();
+    }
+}
+
+// Missing function definitions
+function forceInitMap() {
+    if (map) {
+        map.remove();
+        map = null;
+    }
+    
+    setTimeout(() => {
+        map = L.map('map').setView([13.5503, 78.5026], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        // Add Madanapalle marker
+        userLocation = { lat: 13.5503, lng: 78.5026 };
+        userLocationMarker = L.marker([13.5503, 78.5026])
+            .addTo(map)
+            .bindPopup('📍 Madanapalle Center');
+        
+        updateMarkers();
+    }, 100);
+}
+
+function showMyLocation() {
+    if (userLocation && map) {
+        map.setView([userLocation.lat, userLocation.lng], 15);
+    } else {
+        getLocation();
+    }
+}
+
+function showNotAvailable() {
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('not-available-btn').classList.add('active');
+    filterMarkers('not-available');
 }
